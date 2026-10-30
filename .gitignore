@@ -1,0 +1,4 @@
+*.db
+*.partial
+voice-pictures/
+__pycache__/
