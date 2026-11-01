@@ -18,7 +18,8 @@ Who stops (mode; taken from the start of the file name or set with --mode):
     normal    at natural pauses in speech, passages of roughly 15-35 seconds
     dice      a die decides before each passage how many sentences it gets
     listener  the listener: sentence by sentence with `next`, `note` stops
-    marks     stops set in advance by the speaker (--marks 1:20,3:05; in texts, lines with //)
+    marks     stops set in advance by the speaker, in the file name ("Marks 1.20 3.05 - name.m4a")
+              or with --marks 1:20,3:05; in texts, lines with //
 
 Whisper reservation: whispered words and sounds inside pauses are shown, but not deciphered.
 The tool only says that something is there. Whether to ask is up to the listener; whether to
@@ -84,6 +85,13 @@ def mode_from_name(name):
         if re.match(rf"\s*{word}\b", head):
             return word
     return "normal"
+
+
+def marks_from_name(name):
+    """Stop marks right in the file name: "Marks 1.20 3.05 - walk.m4a" (minute.second, also 1-20).
+    Only the part before the first spaced dash is read."""
+    head = re.split(r"\s[–-]\s", Path(name).stem, maxsplit=1)[0]
+    return sorted(int(m) * 60 + int(sec) for m, sec in re.findall(r"\b(\d{1,2})[.:-](\d{2})\b", head))
 
 
 def read_marks(text):
@@ -572,6 +580,8 @@ def prepare(source, db_path, mode, marks, model, language, words_json=None):
     if not source.is_file():
         raise ListenError(f"file not found: {source}")
     mode = mode or mode_from_name(source.name)
+    if mode == "marks" and not marks:
+        marks = marks_from_name(source.name)
     is_text = source.suffix.lower() in (".txt", ".md")
     whole, grid, spectrum = {}, None, None
 
@@ -604,7 +614,8 @@ def prepare(source, db_path, mode, marks, model, language, words_json=None):
             end_after = {m - 1 for m in text_marks if m > 0}
         else:
             if not marks:
-                raise ListenError("In marks mode a recording needs stop marks: --marks 1:20,3:05")
+                raise ListenError("In marks mode a recording needs stop marks, in the file name "
+                                  "(\"Marks 1.20 3.05 - name.m4a\") or with --marks 1:20,3:05")
             end_after = set()
             for t in marks:  # after the last sentence that starts before the mark
                 before = [i for i, s in enumerate(sentences) if s["a"] < t]

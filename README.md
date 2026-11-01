@@ -53,7 +53,7 @@ The speaker chooses by the start of the file name, or the listener passes `--mod
 | (anything else) | **normal:** at natural pauses in speech, passages of roughly 15–35 seconds |
 | `Dice` | **dice:** before each passage a die decides how many sentences it gets (🎲 shows the roll) |
 | `Listener` | **listener:** the listener goes sentence by sentence with `next` and stops with `note` (at most 8 in a row) |
-| `Marks` | **marks:** at stops the speaker set in advance (`--marks 1:20,3:05`; in text files, a line with `//`) |
+| `Marks` | **marks:** at stops the speaker set in advance, right in the name: `Marks 1.20 3.05 - walk.m4a` stops at 1:20 and 3:05 (or `--marks 1:20,3:05`; in text files, a line with `//`) |
 
 Texts (`.txt`, `.md`) work too, without sound card and picture, for example a script read passage by passage.
 
