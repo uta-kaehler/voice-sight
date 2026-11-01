@@ -296,12 +296,15 @@ def whispered(grid, words, floor):
     """Indices of words that are audible but have hardly any voicing: at least two in a row,
     or a single longer word."""
     candidate, share = [], []
+    voice = _median([d for d, f in zip(grid["db"], grid["f0"]) if f > 0])  # level of the voiced speech
     for w in words:
         f0 = _frames(grid, "f0", w["a"], w["e"])
         db = _frames(grid, "db", w["a"], w["e"])
         voiced = sum(f > 0 for f in f0) / max(1, len(f0))
         audible = len(db) > 2 and _quantile(db, .75) > floor + 12
-        candidate.append(voiced < 0.12 and audible)
+        # a whisper is quieter than the speaker's own voiced speech; loud unvoiced stretches are rather noise over speech
+        quieter = len(db) > 2 and voice is not None and _median(db) < voice - 6
+        candidate.append(voiced < 0.12 and audible and quieter)
         share.append(voiced)
     hits, i = set(), 0
     while i < len(words):
