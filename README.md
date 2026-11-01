@@ -89,6 +89,11 @@ For a second message, add `--db second.db` to every command.
 
 **Notes for AI environments** (containers and sandboxes), learned the hard way:
 
+- **Get the audio file into the environment as a file.** Do not route a recording through the conversation as a
+  large encoded (base64) text block and decode it in the sandbox. In a chat-based environment this pattern sent a
+  conversation into a safety review. Use an environment that can read the file directly (for example a coding agent
+  with file access); if there is no direct way, do not use the tool there.
+
 - **Install with `python3 -m pip`, not plain `pip`.** In some environments `pip` belongs to a different Python.
 - **Network access.** The first run downloads the Whisper model from Hugging Face. Allow `huggingface.co` and the
   download hosts behind it (`*.hf.co`, `*.huggingface.co`).
