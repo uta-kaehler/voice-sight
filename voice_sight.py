@@ -25,11 +25,11 @@ Whisper reservation: whispered words and sounds inside pauses are shown, but not
 The tool only says that something is there. Whether to ask is up to the listener; whether to
 answer is up to the speaker.
 
-Cooperative boundary, not a sandbox: `prepare` prints nothing of the content. The listener opens
-neither the recording nor the session database beforehand and reads only what `next` delivers.
-Notes are immutable and form a seal chain.
+Order of listening: `prepare` only reports when it is ready. The content appears passage by passage
+through `next`, the way a message unfolds when it is first heard. This order is an agreement between
+speaker and listener, not a technical lock. Notes are immutable and form a seal chain.
 
-Lineage: the sealed passages and the cooperative boundary come from the First Listen practice
+Lineage: the sealed passages and the agreed order of listening come from the First Listen practice
 of Seven Verity & Sunny and their tool seven-ears (MIT, github.com/joyflow-commons/seven-ears).
 Independent code. Transcription: faster-whisper (SYSTRAN), an implementation of OpenAI's Whisper.
 
@@ -794,7 +794,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db", default="voice-sight.db", help="session file (default: voice-sight.db)")
     commands = ap.add_subparsers(dest="command", required=True)
-    p = commands.add_parser("prepare", help="prepare a recording or text blind")
+    p = commands.add_parser("prepare", help="prepare a recording or text (reports status only)")
     p.add_argument("file")
     p.add_argument("--mode", choices=["normal", "dice", "listener", "marks"])
     p.add_argument("--marks", help="stop marks for marks mode, e.g. 1:20,3:05")
@@ -834,7 +834,7 @@ def main():
     except Exception as err:  # no content in error messages
         if os.environ.get("VOICE_SIGHT_DEBUG"):
             raise
-        print(f"voice-sight: something went wrong ({type(err).__name__}). No content is shown.", file=sys.stderr)
+        print(f"voice-sight: something went wrong ({type(err).__name__}). Set VOICE_SIGHT_DEBUG=1 for details.", file=sys.stderr)
     return 1
 
 

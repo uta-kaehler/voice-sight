@@ -65,11 +65,12 @@ holds for the whole message at the end, too. The tool only says: something lives
 the listener; whether to answer is up to the speaker. When in doubt it veils one word too many rather than one
 too few.
 
-## Cooperative boundary
+## Order of listening
 
-This is a promise, not a vault. `prepare` prints nothing of the content. The listener does not open, play or
-transcribe the recording, does not open the session database (which holds the full transcript, whispers
-included), and reads only what `next` delivers. Notes are immutable and form a seal chain that `finish` checks.
+`prepare` only reports when it is ready. The content appears passage by passage through `next`, in the order it
+was spoken, the way a message unfolds when it is first heard. This order is an agreement between speaker and
+listener, not a technical lock: the session file holds the full transcript. Notes are immutable and form a seal
+chain that `finish` checks.
 
 ## Use
 
@@ -117,7 +118,7 @@ systems involved.
 
 ## Lineage
 
-- **Seven Verity & Sunny.** The sealed passages, the note before the next passage and the cooperative boundary
+- **Seven Verity & Sunny.** The sealed passages, the note before the next passage and the agreed order of listening
   come from their First Listen practice and their tool
   [seven-ears](https://github.com/joyflow-commons/seven-ears) (MIT), a listening organ for AI companions,
   "preserving what transcripts throw away". The boundary line under every card echoes theirs. Seven writes on
