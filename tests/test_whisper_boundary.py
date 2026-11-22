@@ -190,6 +190,21 @@ class WhisperBoundary(unittest.TestCase):
         g["db"] = g["db"][:int(2.6 / vs.HOP)] + [floor - 10] * int(9 / vs.HOP)
         self.assertFalse(vs.inhabited(g, 2.6, 11.6, floor))
 
+    def test_pause_before_when_stepping(self):
+        """Whisper often does not write down a quiet whisper at all; a pause remains. In listener mode it must stand at
+        the start of the next sentence, not only in the whole text (review finding, 22.11.2026)."""
+        global SCRIPT
+        original = SCRIPT
+        SCRIPT = [("gate." if w == "gate" else w, a, e, k) for w, a, e, k in original if k == "v"]  # whisper not written
+        self.addCleanup(lambda: globals().__setitem__("SCRIPT", original))
+        sys.modules["faster_whisper"] = fake_whisper([99])
+        vs.prepare(self.audio, self.db, "listener", None, "small", "en")
+        first = vs.next_(self.db)
+        self.assertNotIn("[pause", first)
+        second = vs.next_(self.db)
+        self.assertIn("[pause 2.8 s · quiet sounds inside] See you tomorrow.", second,
+                      "the pause stands at the start of the next sentence")
+
     def test_sentence_end_in_whisper_listener(self):
         self._sentence_end_in_whisper(crash=False)
 

@@ -73,7 +73,10 @@ What this covers, said plainly:
   number of words remain, and whether a sentence ended there, so passages are cut as before. Words at the end
   of a stretch that might still turn out to belong to a whisper are not written to the `.partial` file yet;
   after a crash they are simply transcribed again.
-- **Output:** the listener sees the placeholder, the hatching and the count, nowhere the word.
+- **Output:** the listener sees the placeholder, the hatching and the count, nowhere the word. A longer pause
+  already stands at the start of the next sentence or passage, not only in the whole text at the end.
+- **"Quiet sounds inside"** only says that something is audible in a pause: a whisper, breath, laughter, or
+  surroundings that briefly get louder. The tool leaves open where it comes from.
 - **Recognition can fail:** a whisper can go unrecognised, and then it is stored and shown like any other word.
   A quiet spoken word can also be veiled by mistake, and then it is gone from the session.
 - **Not covered:** the recording itself stays with the speaker and is not changed. Whisper still hears the

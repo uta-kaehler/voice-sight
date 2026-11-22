@@ -712,7 +712,21 @@ def _passage_text(db, kind, first, last):
     sentences = [sentence(db, i) for i in range(first, last + 1)]
     if kind == "text":
         return " ".join(s["text"] for s in sentences), sentences
-    return text_with_pauses(sentences, json.loads(session(db)["grid"])), sentences
+    grid = json.loads(session(db)["grid"])
+    return _pause_before(db, first, sentences, grid) + text_with_pauses(sentences, grid), sentences
+
+
+def _pause_before(db, first, sentences, grid):
+    """The pause before the first sentence of a passage, or of a single sentence in listener mode. Otherwise it
+    would only appear in the whole text, and whoever listens sentence by sentence finds it only afterwards."""
+    if first == 0 or not grid:
+        return ""
+    before = sentence(db, first - 1)
+    gap = sentences[0]["a"] - before["e"]
+    if gap < PAUSE_SHOW:
+        return ""
+    extra = " · quiet sounds inside" if inhabited(grid, before["e"], sentences[0]["a"], noise_floor(grid)) else ""
+    return f"[pause {gap:.1f} s{extra}] "
 
 
 def _card(db, s, n, first, last, sentences, roll, final):
