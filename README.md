@@ -91,7 +91,13 @@ includes a crash in the middle of a whisper and the resumed run).
 `prepare` only reports when it is ready. The content appears passage by passage through `next`, in the order it
 was spoken, the way a message unfolds when it is first heard. This order is an agreement between speaker and
 listener, not a technical lock: the session file holds the full transcript. Notes are immutable and form a seal
-chain that `finish` checks.
+chain that `finish` checks. A listener who has no sentence yet moves on with `note TOKEN --without`: the passage is
+sealed all the same, and the journal says "(moved on without a note)". Sometimes you see the sea and have no
+sentence for it yet.
+
+The voice picture is a file on the computer where voice-sight runs. If passages are passed on to someone else, they
+only see its file name unless the picture is given to them as well. When in doubt, ask: "Do you have the picture in
+front of you, or only its file name?"
 
 ## Use
 

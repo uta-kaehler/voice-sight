@@ -9,7 +9,7 @@ sealed. The whole, i.e. the full text and the full card, only comes after the la
 Flow:
     python3 voice_sight.py prepare "Dice - voice message.m4a"
     python3 voice_sight.py next
-    python3 voice_sight.py note TOKEN "impression ..."     (or the note via stdin)
+    python3 voice_sight.py note TOKEN "impression ..."     (or the note via stdin; --without: move on without words)
     python3 voice_sight.py next                            (... until the end)
     python3 voice_sight.py finish
     python3 voice_sight.py journal > journal.md
@@ -758,7 +758,8 @@ def next_(db_path):
         final = open_["last"] + 1 >= total
         _, sentences = _passage_text(db, s["kind"], open_["first"], open_["last"])
         card = _card(db, s, open_["nr"], open_["first"], open_["last"], sentences, open_["roll"], final)
-        return card + "\n\nNote: " + command(f"note {open_['token']} \"...\"")
+        return card + "\n\nNote: " + command(f"note {open_['token']} \"...\"") + \
+            "\nMove on without words: " + command(f"note {open_['token']} --without")
 
 
 def _next_listener(db, s, open_, total):
@@ -785,7 +786,7 @@ def _next_listener(db, s, open_, total):
     if s["kind"] == "audio":
         lines.append(picture_line(db, sentences, f"passage_{open_['nr']:02d}_sentence_{k:02d}.png",
                                   f"Passage {open_['nr']}, sentence {k}"))
-    note_cmd = command(f"note {open_['token']} \"...\"")
+    note_cmd = command(f"note {open_['token']} \"...\"") + "   ·   without words: " + command(f"note {open_['token']} --without")
     if final:
         lines.append("\nThat was the last sentence. Now the note: " + note_cmd)
     elif k >= LISTENER_MAX:
@@ -795,7 +796,16 @@ def _next_listener(db, s, open_, total):
     return "\n".join(lines)
 
 
-def note(db_path, token, text):
+WITHOUT_NOTE = "(moved on without a note)"
+
+
+def note(db_path, token, text, without=False):
+    """Seals the passage. With without=True, wordlessly: sometimes you see the sea and have no sentence for it yet.
+    The passage is sealed all the same, and the journal says that the listener moved on without a note."""
+    if without:
+        if (text or "").strip():
+            raise ListenError("Either a note or --without, not both.")
+        text = WITHOUT_NOTE
     text = (text or "").strip()
     if not text or len(text) > 16000:
         raise ListenError("A note needs 1 to 16000 characters.")
@@ -881,6 +891,7 @@ def main():
     n = commands.add_parser("note", help="seal a note on the current passage")
     n.add_argument("token")
     n.add_argument("text", nargs="?", help="otherwise read from stdin")
+    n.add_argument("--without", action="store_true", help="move on without words; the passage is sealed all the same")
     commands.add_parser("finish", help="full text and full card, only after the last note")
     commands.add_parser("journal", help="all passages with notes as Markdown")
     for sub in commands.choices.values():  # --db may also follow the command
@@ -894,7 +905,7 @@ def main():
         elif a.command == "next":
             out = next_(a.db)
         elif a.command == "note":
-            out = note(a.db, a.token, a.text if a.text is not None else sys.stdin.read())
+            out = note(a.db, a.token, a.text if a.text is not None or a.without else sys.stdin.read(), a.without)
         elif a.command == "finish":
             out = finish(a.db)
         else:

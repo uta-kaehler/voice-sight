@@ -205,6 +205,27 @@ class WhisperBoundary(unittest.TestCase):
         self.assertIn("[pause 2.8 s · quiet sounds inside] See you tomorrow.", second,
                       "the pause stands at the start of the next sentence")
 
+    def test_move_on_without_words(self):
+        """Without a note: the passage is sealed all the same, the chain stays intact, the journal says so."""
+        sys.modules["faster_whisper"] = fake_whisper([99])
+        vs.prepare(self.audio, self.db, "listener", None, "small", "en")
+        out = vs.next_(self.db)
+        self.assertIn("--without", out, "the wordless way is offered")
+        token = out.split("note ")[1].split()[0]
+        with self.assertRaises(vs.ListenError):
+            vs.note(self.db, token, "something", without=True)
+        self.assertIn("Sealed", vs.note(self.db, token, None, without=True))
+        while True:
+            try:
+                vs.finish(self.db)
+                break
+            except vs.ListenError:
+                out = vs.next_(self.db)
+                if "note " in out:
+                    vs.note(self.db, out.split("note ")[1].split()[0], None, without=True)
+        self.assertIn("intact", vs.finish(self.db))
+        self.assertIn(vs.WITHOUT_NOTE, vs.journal(self.db))
+
     def test_sentence_end_in_whisper_listener(self):
         self._sentence_end_in_whisper(crash=False)
 
