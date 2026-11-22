@@ -65,14 +65,22 @@ holds for the whole message at the end, too. The tool only says: something lives
 the listener; whether to answer is up to the speaker. When in doubt it veils one word too many rather than one
 too few.
 
-What this covers today, said plainly:
+What this covers, said plainly:
 - **Processing:** Whisper transcribes everything it can understand, whispered words included. The tool recognises
-  whispering afterwards, from the sound (little voicing, audible, quieter than the speaker's own voice).
-- **Output:** what is recognised as whispered is replaced in everything the listener is shown.
-- **Storage:** the session file and, while a recording is being prepared, the `.partial` file still contain the
-  full transcript, whispered words included. The reservation is therefore an agreement about what is shown, not
-  a lock.
-- **Recognition can fail:** a whisper can go unrecognised, and a quiet spoken word can be veiled by mistake.
+  whispering from the sound (little voicing, audible, quieter than the speaker's own voice).
+- **Storage:** what is recognised as whispered is replaced by a placeholder before anything is written, in the
+  session file and in the `.partial` file kept while a recording is being prepared. Only its position and the
+  number of words remain. Words at the end of a stretch that might still turn out to belong to a whisper are not
+  written to the `.partial` file yet; after a crash they are simply transcribed again.
+- **Output:** the listener sees the placeholder, the hatching and the count, nowhere the word.
+- **Recognition can fail:** a whisper can go unrecognised, and then it is stored and shown like any other word.
+  A quiet spoken word can also be veiled by mistake, and then it is gone from the session.
+- **Not covered:** the recording itself stays with the speaker and is not changed. Whisper still hears the
+  whispered stretch while transcribing; keeping it from Whisper altogether would be a different design.
+  Overwritten files are not securely erased.
+
+Test: `python3 tests/test_whisper_boundary.py` (a generated recording and a stand-in for Whisper, no real voices;
+includes a crash in the middle of a whisper and the resumed run).
 
 ## Order of listening
 

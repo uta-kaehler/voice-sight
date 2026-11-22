@@ -160,7 +160,7 @@ def sound_grid(x):
     return {"db": np.round(db, 1).tolist(), "bright": np.round(bright).tolist(), "f0": np.round(f0).tolist()}, spectrum
 
 
-def transcribe(x, model, language, partial_path):
+def transcribe(x, model, language, partial_path, grid=None):
     """Words with timestamps. Plain transcribe instead of the batched pipeline, which dies silently
     on long files. Every segment is written to partial_path at once; after a crash, the next run
     continues where this one stopped."""
@@ -175,10 +175,18 @@ def transcribe(x, model, language, partial_path):
     m = WhisperModel(model, device="cpu", compute_type="int8")
     segments, _ = m.transcribe(x[int(start * SR):], language=language, beam_size=2, vad_filter=True,
                                word_timestamps=True)
+    floor = noise_floor(grid) if grid else None
     for seg in segments:
         for w in seg.words or []:
             words.append({"w": w.word.strip(), "a": round(w.start + start, 2), "e": round(w.end + start, 2)})
-        partial_path.write_text(json.dumps(words, ensure_ascii=False), encoding="utf-8")
+        # Whisper reservation: veil what is recognised as whispered before anything is written. Words at the end
+        # that might still turn out to belong to a whisper are not written yet; after a crash they are simply
+        # transcribed again.
+        settled = words
+        if grid:
+            mask_whispered(grid, words, floor)
+            settled = words[:len(words) - unsettled_tail(grid, words, floor)]
+        partial_path.write_text(json.dumps(settled, ensure_ascii=False), encoding="utf-8")
     return words
 
 
@@ -300,9 +308,8 @@ def inhabited(grid, a, e, floor):
     return len(db) > 5 and sum(d > floor + 12 for d in db) / len(db) > 0.15
 
 
-def whispered(grid, words, floor):
-    """Indices of words that are audible but have hardly any voicing: at least two in a row,
-    or a single longer word."""
+def _whisper_scores(grid, words, floor):
+    """Per word: could it be whispered (audible, hardly any voicing, quieter than the voice), and its voicing share."""
     candidate, share = [], []
     voice = _median([d for d, f in zip(grid["db"], grid["f0"]) if f > 0])  # level of the voiced speech
     for w in words:
@@ -314,7 +321,14 @@ def whispered(grid, words, floor):
         quieter = len(db) > 2 and voice is not None and _median(db) < voice - 6
         candidate.append(voiced < 0.12 and audible and quieter)
         share.append(voiced)
-    hits, i = set(), 0
+    return candidate, share
+
+
+def whispered(grid, words, floor):
+    """Indices of words that are audible but have hardly any voicing: at least two in a row,
+    or a single longer word. Words veiled during preparation always count."""
+    candidate, share = _whisper_scores(grid, words, floor)
+    hits, i = {k for k, w in enumerate(words) if w.get("q")}, 0
     while i < len(words):
         j = i
         while j < len(words) and candidate[j]:
@@ -329,6 +343,26 @@ def whispered(grid, words, floor):
         if not new:
             return hits
         hits |= new
+
+
+VEIL = "·"  # stands where a veiled word was; the word itself is not kept
+
+
+def mask_whispered(grid, words, floor):
+    """Replace every word recognised as whispered by VEIL, in place. Only position and count remain."""
+    for k in whispered(grid, words, floor):
+        words[k]["w"] = VEIL
+        words[k]["q"] = True
+    return words
+
+
+def unsettled_tail(grid, words, floor):
+    """How many words at the end might still become part of a whisper once more words follow."""
+    candidate, share = _whisper_scores(grid, words, floor)
+    n = 0
+    while n < len(words) and not words[-1 - n].get("q") and (candidate[-1 - n] or share[-1 - n] < 0.25):
+        n += 1
+    return n
 
 
 def text_with_pauses(sentences, grid=None):
@@ -599,7 +633,9 @@ def prepare(source, db_path, mode, marks, model, language, words_json=None):
                 print("The recording is being written down now. This takes about as long as the recording itself.",
                       file=sys.stderr, flush=True)
                 partial = Path(str(db_path) + ".partial")
-                words = transcribe(x, model, language, partial)
+                words = transcribe(x, model, language, partial, grid)
+            if grid and words:
+                mask_whispered(grid, words, noise_floor(grid))
         if not words:
             raise ListenError("No speech was found in the recording.")
         sentences = sentences_from_words(words)
