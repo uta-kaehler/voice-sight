@@ -137,6 +137,36 @@ class WhisperBoundary(unittest.TestCase):
         self.assertEqual(3, len(veiled), "position and count of the whisper remain")
         self.assertTrue(all(w["w"] == vs.VEIL for w in veiled))
 
+    def _sentence_end_in_whisper(self, crash):
+        """A sentence that ends with a whispered word stays its own sentence (review finding, listener mode)."""
+        global SCRIPT
+        original = SCRIPT
+        SCRIPT = [(w + "." if w == SECRET[2] else w, a, e, k) for w, a, e, k in original]
+        self.addCleanup(lambda: globals().__setitem__("SCRIPT", original))
+        expected = len(vs.sentences_from_words([{"w": w, "a": a, "e": e} for w, a, e, _ in SCRIPT]))
+        self.assertEqual(2, expected, "unveiled, the script has two sentences")
+        if crash:
+            sys.modules["faster_whisper"] = fake_whisper([3.62, 99], crash_after=0)
+            with self.assertRaises(KeyboardInterrupt):
+                vs.prepare(self.audio, self.db, "listener", None, "small", "en")
+        sys.modules["faster_whisper"] = fake_whisper([3.62, 99])
+        vs.prepare(self.audio, self.db, "listener", None, "small", "en")
+        con = sqlite3.connect(self.db)
+        count = con.execute("SELECT COUNT(*) FROM sentences").fetchone()[0]
+        con.close()
+        self.assertEqual(expected, count, "veiling keeps the sentence end")
+        first = vs.next_(self.db)
+        self.assertIn("[whispered, 3 words]", first)
+        self.assertNotIn("tomorrow", first, "the following sentence does not arrive early")
+        for path, data in self.writes:
+            self.assertNoSecret(data.replace(".", ""), f"a write to {Path(path).name}")
+
+    def test_sentence_end_in_whisper_listener(self):
+        self._sentence_end_in_whisper(crash=False)
+
+    def test_sentence_end_in_whisper_listener_after_crash(self):
+        self._sentence_end_in_whisper(crash=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

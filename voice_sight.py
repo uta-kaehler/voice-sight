@@ -199,7 +199,7 @@ def sentences_from_words(words):
         current.append(w)
         following = words[i + 1] if i + 1 < len(words) else None
         gap = (following["a"] - w["e"]) if following else 99
-        if re.search(r"[.!?…]$", w["w"]) or gap >= 1.2 or w["e"] - current[0]["a"] >= 25:
+        if re.search(r"[.!?…]$", w["w"]) or w.get("end") or gap >= 1.2 or w["e"] - current[0]["a"] >= 25:
             sentences.append(current)
             current = []
     if current:
@@ -349,8 +349,13 @@ VEIL = "·"  # stands where a veiled word was; the word itself is not kept
 
 
 def mask_whispered(grid, words, floor):
-    """Replace every word recognised as whispered by VEIL, in place. Only position and count remain."""
+    """Replace every word recognised as whispered by VEIL, in place. Only position, count and whether a sentence
+    ended there remain (a neutral mark, so that sentences are cut as before, without keeping the wording)."""
     for k in whispered(grid, words, floor):
+        if words[k].get("q"):
+            continue
+        if re.search(r"[.!?…]$", words[k]["w"]):
+            words[k]["end"] = True
         words[k]["w"] = VEIL
         words[k]["q"] = True
     return words
