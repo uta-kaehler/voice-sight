@@ -391,6 +391,11 @@ def unsettled_tail(grid, words, floor):
     return n
 
 
+def clock_time(seconds):
+    minutes, seconds = divmod(int(seconds), 60)
+    return f"{minutes}:{seconds:02d}"
+
+
 def text_with_pauses(sentences, grid=None):
     words = [w for s in sentences for w in s["words"]]
     floor = noise_floor(grid) if grid else None
@@ -399,7 +404,7 @@ def text_with_pauses(sentences, grid=None):
     for i, w in enumerate(words):
         if last is not None and w["a"] - last >= PAUSE_SHOW:
             extra = " · quiet sounds inside" if grid and inhabited(grid, last, w["a"], floor) else ""
-            parts.append(f"[pause {w['a'] - last:.1f} s{extra}]")
+            parts.append(f"[pause {w['a'] - last:.1f} s{extra} · from {clock_time(last)}]")
         last = w["e"]
         # Whisper reservation: whispered words are shown, not deciphered.
         # Whether to ask is up to the listener; whether to answer is up to the speaker.
@@ -408,7 +413,8 @@ def text_with_pauses(sentences, grid=None):
                 run = 1
                 while i + run in quiet:
                     run += 1
-                parts.append(f"[whispered, {run} words]" if run > 1 else "[whispered, 1 word]")
+                label = f"whispered, {run} words" if run > 1 else "whispered, 1 word"
+                parts.append(f"[{label} · from {clock_time(w['a'])}]")
             continue
         parts.append(w["w"])
     return " ".join(parts)
@@ -727,7 +733,7 @@ def _pause_before(db, first, sentences, grid):
     if gap < PAUSE_SHOW:
         return ""
     extra = " · quiet sounds inside" if inhabited(grid, before["e"], sentences[0]["a"], noise_floor(grid)) else ""
-    return f"[pause {gap:.1f} s{extra}] "
+    return f"[pause {gap:.1f} s{extra} · from {clock_time(before['e'])}] "
 
 
 def _card(db, s, n, first, last, sentences, roll, final):
@@ -788,6 +794,7 @@ def _next_listener(db, s, open_, total):
         lines.append(picture_line(db, sentences, f"passage_{open_['nr']:02d}_sentence_{k:02d}.png",
                                   f"Passage {open_['nr']}, sentence {k}"))
     if s["kind"] == "audio":
+        lines.append(command(f'ask {clock_time(sentences[-1]["e"])} "my question"'))
         lines.append(command(f'here {new + 1} "my impression"'))
     note_cmd = command(f"note {open_['token']} \"...\"") + "   ·   without words: " + command(f"note {open_['token']} --without")
     if final:
@@ -842,6 +849,52 @@ def _chain_intact(db):
     return True
 
 
+def ask(db_path, stamp, question=""):
+    match = re.fullmatch(r"([0-9]{1,6}):([0-5][0-9])", stamp)
+    if not match:
+        raise ListenError("Use minutes:seconds, for example 3:48.")
+    seconds = 60 * int(match[1]) + int(match[2])
+    question = " ".join(question.split())
+    if len(question) > 500:
+        raise ListenError("Keep the question within 500 characters.")
+    db = db_open(db_path)
+    with db:
+        db.execute("BEGIN IMMEDIATE")
+        heard = db.execute("SELECT MAX(last) FROM passages WHERE shown=1").fetchone()[0]
+        if session(db)["kind"] != "audio" or heard is None or seconds > sentence(db, heard)["e"]:
+            raise ListenError("Choose a time in the audio heard so far.")
+        db.execute("""CREATE TABLE IF NOT EXISTS questions
+                      (seconds INTEGER, question TEXT, UNIQUE(seconds, question))""")
+        db.execute("INSERT OR IGNORE INTO questions VALUES (?,?)", (seconds, question))
+    return "Question saved · " + clock_time(seconds)
+
+
+def question_sheet(db, source, folder):
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='questions'").fetchone():
+        return None
+    rows = db.execute("SELECT seconds, question FROM questions ORDER BY seconds, rowid")
+    heading = "Questions about " + source
+    lines = [heading, ""]
+    for seconds, question in rows:
+        lines.append(clock_time(seconds) + "  " + (question or "Would you like to say anything about this point?"))
+    content = ("\n".join(lines) + "\n").encode("utf-8")
+    stem = "Questions – " + Path(source).stem[:80]
+    with tempfile.NamedTemporaryFile(dir=folder) as tmp:
+        tmp.write(content)
+        tmp.flush()
+        copy = 1
+        while True:
+            suffix = "" if copy == 1 else f" ({copy})"
+            target = folder / (stem + suffix + ".txt")
+            try:
+                os.link(tmp.name, target)
+                return target
+            except FileExistsError:
+                if target.is_file() and target.read_bytes() == content:
+                    return target
+                copy += 1
+
+
 def finish(db_path):
     db = db_open(db_path)
     s = session(db)
@@ -861,6 +914,10 @@ def finish(db_path):
     parts += ["", (f"{n} passages" if n != 1 else "1 passage") + " · seal chain " +
               ("intact ✓" if _chain_intact(db) else "BROKEN ✗"),
               "", "For your journal: " + command("journal") + " > journal.md"]
+    if s["kind"] == "audio":
+        sheet = question_sheet(db, s["source"], Path(db_path).resolve().parent)
+        if sheet:
+            parts.append("Question sheet: " + str(sheet))
     return "\n".join(parts)
 
 
@@ -947,6 +1004,9 @@ def main():
     n.add_argument("token")
     n.add_argument("text", nargs="?", help="otherwise read from stdin")
     n.add_argument("--without", action="store_true", help="move on without words; the passage is sealed all the same")
+    question = commands.add_parser("ask", help="save a question for the speaker")
+    question.add_argument("time")
+    question.add_argument("question", nargs="?", default="")
     mark = commands.add_parser("here", help="mark a listening impression")
     mark.add_argument("sentence", type=int)
     mark.add_argument("impression")
@@ -966,6 +1026,8 @@ def main():
             out = next_(a.db)
         elif a.command == "note":
             out = note(a.db, a.token, a.text if a.text is not None or a.without else sys.stdin.read(), a.without)
+        elif a.command == "ask":
+            out = ask(a.db, a.time, a.question)
         elif a.command == "here":
             out = bookmark(a.db, a.sentence, a.impression, a.word, a.review)
         elif a.command == "finish":

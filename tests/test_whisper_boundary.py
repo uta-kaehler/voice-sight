@@ -98,6 +98,28 @@ class WhisperBoundary(unittest.TestCase):
         for s in SECRET:
             self.assertNotIn(s, text, f"whispered word found in {where}")
 
+    def test_question_sheet(self):
+        sys.modules["faster_whisper"] = fake_whisper([99])
+        vs.prepare(self.audio, self.db, "normal", None, "small", "de")
+        with self.assertRaises(vs.ListenError):
+            vs.ask(self.db, "0:00")
+        vs.next_(self.db)
+        vs.ask(self.db, "0:04")
+        vs.ask(self.db, "0:02", "Question?")
+        vs.ask(self.db, "0:02", "Question?")
+        with self.assertRaises(vs.ListenError):
+            vs.ask(self.db, "3:48")
+        db = vs.db_open(self.db)
+        token = db.execute("SELECT token FROM passages").fetchone()[0]
+        vs.note(self.db, token, "", True)
+        vs.finish(self.db)
+        vs.finish(self.db)
+        sheet, = self.tmp.glob("*.txt")
+        lines = sheet.read_text().splitlines()
+        self.assertEqual(lines[2], "0:02  Question?")
+        self.assertTrue(lines[3].startswith("0:04"))
+        self.assertEqual(len(lines), 4)
+
     def test_listening_marks(self):
         words = self.tmp / "words.json"
         words.write_text(json.dumps([{"w": w, "a": a, "e": e} for w, a, e, _ in SCRIPT]))
@@ -157,7 +179,7 @@ class WhisperBoundary(unittest.TestCase):
         vs.prepare(self.audio, self.db, None, None, "small", "en")
         out = vs.next_(self.db)
         self.assertNoSecret(out, "the passage shown")
-        self.assertIn("[whispered, 3 words]", out)
+        self.assertIn("[whispered, 3 words · from 0:03]", out)
         self.assertIn("arrived", out)
         con = sqlite3.connect(self.db)
         stored = [json.loads(r[0]) for r in con.execute("SELECT * FROM sentences").fetchall() for r in [r[1:]]]
@@ -185,7 +207,7 @@ class WhisperBoundary(unittest.TestCase):
         con.close()
         self.assertEqual(expected, count, "veiling keeps the sentence end")
         first = vs.next_(self.db)
-        self.assertIn("[whispered, 3 words]", first)
+        self.assertIn("[whispered, 3 words · from 0:03]", first)
         self.assertNotIn("tomorrow", first, "the following sentence does not arrive early")
         for path, data in self.writes:
             self.assertNoSecret(data.replace(".", ""), f"a write to {Path(path).name}")
@@ -231,7 +253,7 @@ class WhisperBoundary(unittest.TestCase):
         first = vs.next_(self.db)
         self.assertNotIn("[pause", first)
         second = vs.next_(self.db)
-        self.assertIn("[pause 2.8 s · quiet sounds inside] See you tomorrow.", second,
+        self.assertIn("[pause 2.8 s · quiet sounds inside · from 0:02] See you tomorrow.", second,
                       "the pause stands at the start of the next sentence")
 
     def test_move_on_without_words(self):
