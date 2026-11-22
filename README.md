@@ -163,3 +163,11 @@ voice-sight is independent code; nothing is copied from seven-ears.
 ## License
 
 MIT
+
+## Here
+
+In listener mode each audio sentence shows a `here` command. Use it to keep an impression at that sentence’s end and continue at your own pace. Add `--word "word,"` to select the start of a unique visible word, including punctuation. After completing the recording use `here 3 "my impression" --review` for a retrospective mark on sentence 3 (counting from 1 in the whole recording). The journal lists each mark with its source time and a replay link starting three seconds earlier. Keep the original recording beside the exported Markdown journal and use a viewer that supports media time links.
+
+### Questions for the speaker
+
+Use `ask 3:48` or `ask 3:48 "Your question?"` at any time already heard. Pauses and whisper markers show their start in minutes and seconds. Asking keeps the passage open. At `finish`, questions are written chronologically to a separate UTF-8 text file beside the session database. Place the database in the desired output folder. Personal impressions stay in the journal. If no questions were saved, no sheet is created.
