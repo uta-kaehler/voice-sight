@@ -53,6 +53,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from urllib.parse import quote
 import unicodedata
 import wave
 from pathlib import Path
@@ -786,6 +787,8 @@ def _next_listener(db, s, open_, total):
     if s["kind"] == "audio":
         lines.append(picture_line(db, sentences, f"passage_{open_['nr']:02d}_sentence_{k:02d}.png",
                                   f"Passage {open_['nr']}, sentence {k}"))
+    if s["kind"] == "audio":
+        lines.append(command(f'here {new + 1} "my impression"'))
     note_cmd = command(f"note {open_['token']} \"...\"") + "   ·   without words: " + command(f"note {open_['token']} --without")
     if final:
         lines.append("\nThat was the last sentence. Now the note: " + note_cmd)
@@ -861,6 +864,57 @@ def finish(db_path):
     return "\n".join(parts)
 
 
+
+def bookmark(db_path, number, impression, word=None, review=False):
+    """Keep a listening impression at the original audio position without advancing the passage."""
+    impression = impression.strip()
+    if not 1 <= len(impression) <= 16000:
+        raise ListenError("Enter an impression (1–16000 characters).")
+    db = db_open(db_path)
+    with db:
+        db.execute("BEGIN IMMEDIATE")
+        s = session(db)
+        if s["kind"] != "audio":
+            raise ListenError("This mark needs an audio recording.")
+        index = number - 1
+        if review:
+            heard = db.execute("SELECT MAX(last) FROM passages WHERE note IS NOT NULL").fetchone()[0]
+            if heard != sentence_count(db) - 1 or not 0 <= index <= heard:
+                raise ListenError("Choose a sentence from the completed recording.")
+        else:
+            current = db.execute("SELECT last FROM passages WHERE shown=1 AND note IS NULL").fetchone()
+            if s["mode"] != "listener" or current is None or current[0] != index:
+                raise ListenError("Mark the current sentence in listener mode.")
+        item = sentence(db, index)
+        position = item["e"]
+        if word is not None:
+            matches = [w for w in item["words"] if not w.get("q") and w["w"].casefold() == word.casefold()]
+            if len(matches) != 1:
+                raise ListenError("Choose a unique visible word including punctuation.")
+            position = matches[0]["a"]
+            word = matches[0]["w"]
+        db.execute("""CREATE TABLE IF NOT EXISTS bookmarks
+                      (sentence INTEGER, position REAL, word TEXT NOT NULL, review INTEGER, impression TEXT,
+                       UNIQUE(sentence, position, word, review, impression))""")
+        db.execute("INSERT OR IGNORE INTO bookmarks VALUES (?,?,?,?,?)",
+                   (number, position, word or "", int(review), impression))
+    return f"Marked · {position:.2f} s"
+
+
+def bookmark_lines(db, s):
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bookmarks'").fetchone():
+        return []
+    lines = ["## Listening marks", ""]
+    for mark in db.execute("SELECT * FROM bookmarks ORDER BY rowid"):
+        t = mark["position"]
+        phase = "On reflection" if mark["review"] else "While listening"
+        anchor = mark["word"] or "end of sentence"
+        replay = "./" + quote(s["source"], safe="") + f"#t={max(0, t - 3):.2f}"
+        lines += [f"- {phase} · sentence {mark['sentence']} · {anchor} · {t:.2f} s "
+                  f"[Replay]({replay}) — {mark['impression']}"]
+    return lines
+
+
 def journal(db_path):
     db = db_open(db_path)
     s = session(db)
@@ -872,6 +926,7 @@ def journal(db_path):
             a, e = sentence(db, p["first"])["a"], sentence(db, p["last"])["e"]
             head += f" · {int(a // 60)}:{int(a % 60):02d}–{int(e // 60)}:{int(e % 60):02d}"
         lines += [head, "", "> " + text, "", p["note"], "", f"*{p['noted_at']} · seal {p['seal']}*", ""]
+    lines.extend(bookmark_lines(db, s))
     return "\n".join(lines)
 
 
@@ -892,6 +947,11 @@ def main():
     n.add_argument("token")
     n.add_argument("text", nargs="?", help="otherwise read from stdin")
     n.add_argument("--without", action="store_true", help="move on without words; the passage is sealed all the same")
+    mark = commands.add_parser("here", help="mark a listening impression")
+    mark.add_argument("sentence", type=int)
+    mark.add_argument("impression")
+    mark.add_argument("--word", dest="word")
+    mark.add_argument("--review", dest="review", action="store_true")
     commands.add_parser("finish", help="full text and full card, only after the last note")
     commands.add_parser("journal", help="all passages with notes as Markdown")
     for sub in commands.choices.values():  # --db may also follow the command
@@ -906,6 +966,8 @@ def main():
             out = next_(a.db)
         elif a.command == "note":
             out = note(a.db, a.token, a.text if a.text is not None or a.without else sys.stdin.read(), a.without)
+        elif a.command == "here":
+            out = bookmark(a.db, a.sentence, a.impression, a.word, a.review)
         elif a.command == "finish":
             out = finish(a.db)
         else:

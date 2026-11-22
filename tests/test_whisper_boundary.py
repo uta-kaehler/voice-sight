@@ -98,6 +98,35 @@ class WhisperBoundary(unittest.TestCase):
         for s in SECRET:
             self.assertNotIn(s, text, f"whispered word found in {where}")
 
+    def test_listening_marks(self):
+        words = self.tmp / "words.json"
+        words.write_text(json.dumps([{"w": w, "a": a, "e": e} for w, a, e, _ in SCRIPT]))
+        vs.prepare(self.audio, self.db, "listener", [], "small", "de", words)
+        with self.assertRaises(vs.ListenError):
+            vs.bookmark(self.db, 1, "early")
+        vs.next_(self.db)
+        vs.bookmark(self.db, 1, "first impression", word=SCRIPT[0][0])
+        vs.bookmark(self.db, 1, "first impression", word=SCRIPT[0][0])
+        with self.assertRaises(vs.ListenError):
+            vs.bookmark(self.db, 1, "hidden", word=SECRET[0])
+        db = vs.db_open(self.db)
+        count = vs.sentence_count(db)
+        for _ in range(count - 1):
+            vs.next_(self.db)
+        vs.bookmark(self.db, count, "end")
+        with self.assertRaises(vs.ListenError):
+            vs.bookmark(self.db, 1, "early review", review=True)
+        token = db.execute("SELECT token FROM passages").fetchone()[0]
+        vs.note(self.db, token, "", True)
+        vs.bookmark(self.db, 1, "looking back", review=True)
+        output = vs.journal(self.db)
+        self.assertEqual(output.count("first impression"), 1)
+        self.assertIn("0.50 s", output)
+        self.assertIn("6.90 s", output)
+        self.assertIn("Normal%20-%20test.wav#t=3.90", output)
+        self.assertIn("On reflection", output)
+        self.assertTrue(vs._chain_intact(db))
+
     def test_detection_works_on_the_synthetic_recording(self):
         x = vs.read_wav(self.audio)
         grid, _ = vs.sound_grid(x)

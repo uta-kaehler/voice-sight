@@ -163,3 +163,7 @@ voice-sight is independent code; nothing is copied from seven-ears.
 ## License
 
 MIT
+
+## Here
+
+In listener mode each audio sentence shows a `here` command. Use it to keep an impression at that sentence’s end and continue at your own pace. Add `--word "word,"` to select the start of a unique visible word, including punctuation. After completing the recording use `here 3 "my impression" --review` for a retrospective mark on sentence 3 (counting from 1 in the whole recording). The journal lists each mark with its source time and a replay link starting three seconds earlier. Keep the original recording beside the exported Markdown journal and use a viewer that supports media time links.
