@@ -70,8 +70,9 @@ What this covers, said plainly:
   whispering from the sound (little voicing, audible, quieter than the speaker's own voice).
 - **Storage:** what is recognised as whispered is replaced by a placeholder before anything is written, in the
   session file and in the `.partial` file kept while a recording is being prepared. Only its position and the
-  number of words remain, and whether a sentence ended there, so passages are cut as before. Words at the end of a stretch that might still turn out to belong to a whisper are not
-  written to the `.partial` file yet; after a crash they are simply transcribed again.
+  number of words remain, and whether a sentence ended there, so passages are cut as before. Words at the end
+  of a stretch that might still turn out to belong to a whisper are not written to the `.partial` file yet;
+  after a crash they are simply transcribed again.
 - **Output:** the listener sees the placeholder, the hatching and the count, nowhere the word.
 - **Recognition can fail:** a whisper can go unrecognised, and then it is stored and shown like any other word.
   A quiet spoken word can also be veiled by mistake, and then it is gone from the session.
