@@ -65,6 +65,15 @@ holds for the whole message at the end, too. The tool only says: something lives
 the listener; whether to answer is up to the speaker. When in doubt it veils one word too many rather than one
 too few.
 
+What this covers today, said plainly:
+- **Processing:** Whisper transcribes everything it can understand, whispered words included. The tool recognises
+  whispering afterwards, from the sound (little voicing, audible, quieter than the speaker's own voice).
+- **Output:** what is recognised as whispered is replaced in everything the listener is shown.
+- **Storage:** the session file and, while a recording is being prepared, the `.partial` file still contain the
+  full transcript, whispered words included. The reservation is therefore an agreement about what is shown, not
+  a lock.
+- **Recognition can fail:** a whisper can go unrecognised, and a quiet spoken word can be veiled by mistake.
+
 ## Order of listening
 
 `prepare` only reports when it is ready. The content appears passage by passage through `next`, in the order it
