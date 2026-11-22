@@ -13,6 +13,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest.mock import patch
 import wave
 from pathlib import Path
 
@@ -112,8 +113,20 @@ class WhisperBoundary(unittest.TestCase):
         db = vs.db_open(self.db)
         token = db.execute("SELECT token FROM passages").fetchone()[0]
         vs.note(self.db, token, "", True)
-        vs.finish(self.db)
-        vs.finish(self.db)
+        original_open = Path.open
+        def deny_sheet_write(path, mode="r", *args, **kwargs):
+            if mode == "xb":
+                raise PermissionError("read-only destination")
+            return original_open(path, mode, *args, **kwargs)
+
+        with patch.object(Path, "open", autospec=True, side_effect=deny_sheet_write):
+            result = vs.finish(self.db)
+        self.assertIn("Could not create the question sheet", result)
+        self.assertIn("Full text:", result)
+        self.assertIn("Whole card:", result)
+        with patch("os.link", side_effect=PermissionError("hard links unavailable")):
+            vs.finish(self.db)
+            vs.finish(self.db)
         sheet, = self.tmp.glob("*.txt")
         lines = sheet.read_text().splitlines()
         self.assertEqual(lines[2], "0:02  Question?")

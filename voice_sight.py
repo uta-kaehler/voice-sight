@@ -879,20 +879,24 @@ def question_sheet(db, source, folder):
         lines.append(clock_time(seconds) + "  " + (question or "Would you like to say anything about this point?"))
     content = ("\n".join(lines) + "\n").encode("utf-8")
     stem = "Questions – " + Path(source).stem[:80]
-    with tempfile.NamedTemporaryFile(dir=folder) as tmp:
-        tmp.write(content)
-        tmp.flush()
-        copy = 1
-        while True:
-            suffix = "" if copy == 1 else f" ({copy})"
-            target = folder / (stem + suffix + ".txt")
-            try:
-                os.link(tmp.name, target)
+    copy = 1
+    while True:
+        suffix = "" if copy == 1 else f" ({copy})"
+        target = folder / (stem + suffix + ".txt")
+        try:
+            output = target.open("xb")
+        except FileExistsError:
+            if target.is_file() and target.read_bytes() == content:
                 return target
-            except FileExistsError:
-                if target.is_file() and target.read_bytes() == content:
-                    return target
-                copy += 1
+            copy += 1
+            continue
+        try:
+            with output:
+                output.write(content)
+        except OSError:
+            target.unlink(missing_ok=True)
+            raise
+        return target
 
 
 def finish(db_path):
@@ -915,9 +919,14 @@ def finish(db_path):
               ("intact ✓" if _chain_intact(db) else "BROKEN ✗"),
               "", "For your journal: " + command("journal") + " > journal.md"]
     if s["kind"] == "audio":
-        sheet = question_sheet(db, s["source"], Path(db_path).resolve().parent)
-        if sheet:
-            parts.append("Question sheet: " + str(sheet))
+        try:
+            with db:
+                db.execute("BEGIN IMMEDIATE")
+                sheet = question_sheet(db, s["source"], Path(db_path).resolve().parent)
+            if sheet:
+                parts.append("Question sheet: " + str(sheet))
+        except OSError as error:
+            parts.append(f"Could not create the question sheet. The questions remain in the session. Retry finish after resolving the write error. ({error})")
     return "\n".join(parts)
 
 
