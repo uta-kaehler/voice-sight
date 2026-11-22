@@ -161,6 +161,35 @@ class WhisperBoundary(unittest.TestCase):
         for path, data in self.writes:
             self.assertNoSecret(data.replace(".", ""), f"a write to {Path(path).name}")
 
+    def test_calibration_real_patterns(self):
+        """Patterns measured on a real test recording (22.11.2026), rebuilt synthetically:
+        a spoken word fading out before a whisper and a word right after a long pause stay readable,
+        a whisper that fills only part of a long pause is still reported as quiet sounds."""
+        x = vs.read_wav(self.audio)
+        grid, _ = vs.sound_grid(x)
+        floor = vs.noise_floor(grid)
+        # a fading spoken word: some voicing (about 10 %), quieter, alone -> not a whisper
+        g = {k: list(v) for k, v in grid.items()}
+        a, e = int(2.0 / vs.HOP), int(2.4 / vs.HOP)
+        for i in range(a, e):
+            g["f0"][i] = 140.0 if (i - a) % 10 == 0 else 0.0
+            g["db"][i] = g["db"][i] - 12
+        words = [{"w": "gate", "a": 2.0, "e": 2.4}]
+        self.assertEqual(set(), vs.whispered(g, words, floor), "a fading spoken word is not veiled")
+        # a word after a long pause is not pulled into a whisper by the edge rule
+        words = [{"w": w, "a": a, "e": e} for w, a, e, _ in SCRIPT]
+        words[8] = {"w": "See", "a": 9.0, "e": 9.3}  # 4 s after the whisper instead of 0.4 s
+        self.assertNotIn(8, vs.whispered(grid, words, floor))
+        # a whisper filling 1.5 s of a 9 s pause counts as quiet sounds, plain near-silence does not
+        g = {k: list(v) for k, v in grid.items()}
+        quiet = int(3.0 / vs.HOP)
+        g["db"] = g["db"][:int(2.6 / vs.HOP)] + [floor - 10] * int(9 / vs.HOP)
+        for i in range(quiet, quiet + int(1.5 / vs.HOP)):
+            g["db"][i] = floor + 7 if i % 7 else floor - 5
+        self.assertTrue(vs.inhabited(g, 2.6, 11.6, floor))
+        g["db"] = g["db"][:int(2.6 / vs.HOP)] + [floor - 10] * int(9 / vs.HOP)
+        self.assertFalse(vs.inhabited(g, 2.6, 11.6, floor))
+
     def test_sentence_end_in_whisper_listener(self):
         self._sentence_end_in_whisper(crash=False)
 

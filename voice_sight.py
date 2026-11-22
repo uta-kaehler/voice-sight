@@ -303,9 +303,24 @@ def _frames(grid, key, a, e):
 
 
 def inhabited(grid, a, e, floor):
-    """Is something audible inside a silence (whisper, breath, laughter, surroundings)?"""
+    """Is something audible inside a silence (whisper, breath, laughter, surroundings)? Either a good part of the
+    silence is clearly above the floor, or there is a quieter stretch of at least 0.4 s somewhere in it (a whisper
+    in a long pause fills only part of it)."""
     db = _frames(grid, "db", a + 0.1, e - 0.1)
-    return len(db) > 5 and sum(d > floor + 12 for d in db) / len(db) > 0.15
+    if len(db) <= 5:
+        return False
+    if sum(d > floor + 12 for d in db) / len(db) > 0.15:
+        return True
+    run = best = dip = 0
+    for d in db:
+        if d > floor + 5:
+            run, dip = run + 1, 0
+        else:
+            dip += 1
+            if dip > 10:  # dips up to 0.2 s (between syllables) belong to the stretch, longer ones end it
+                run = 0
+        best = max(best, run)
+    return best * HOP >= 0.4
 
 
 def _whisper_scores(grid, words, floor):
@@ -333,13 +348,18 @@ def whispered(grid, words, floor):
         j = i
         while j < len(words) and candidate[j]:
             j += 1
-        if j - i >= 2 or (j - i == 1 and words[i]["e"] - words[i]["a"] >= 0.35):
+        # a single word only if it has almost no voicing: a spoken word fading out at a sentence end has some
+        if j - i >= 2 or (j - i == 1 and words[i]["e"] - words[i]["a"] >= 0.35 and share[i] < 0.06):
             hits.update(range(i, j))
         i = max(j, i + 1)
-    # generous edges: neighbours with little voicing belong to the whisper (rather veil one too many)
+    # generous edges: neighbours with little voicing belong to the whisper (rather veil one too many),
+    # but only right next to it, not across a pause
+    def close(t, k):
+        return (words[k]["a"] - words[t]["e"] if k > t else words[t]["a"] - words[k]["e"]) < 0.3
+
     while True:
         new = {k for t in hits for k in (t - 1, t + 1)
-               if 0 <= k < len(words) and k not in hits and share[k] < 0.25}
+               if 0 <= k < len(words) and k not in hits and share[k] < 0.25 and close(t, k)}
         if not new:
             return hits
         hits |= new
